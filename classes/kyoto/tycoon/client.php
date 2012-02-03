@@ -71,6 +71,14 @@ class Kyoto_Tycoon_Client {
 		return self::$instances[$name];
 	}
 
+    // Constants for Base64-encoded keywords
+    const BASE64_KEY = 'a2V5';
+    const BASE64_VALUE = 'dmFsdWU=';
+
+    // Constants for tab-separated-values format
+    const TAB = "\t";
+    const CRLF = "\r\n";
+
 	/**
      * @var  string  Holds the instance name.
      */
@@ -86,7 +94,7 @@ class Kyoto_Tycoon_Client {
      * @var  object  Holds a reference to the REST_Client class instance we
      *               use to do HTTP communication with Kyoto Tycoon.
      */
-    protected $_rest = NULL;
+    protected $_rest_client = NULL;
 
 	/**
 	 * Stores the client configuration locally and names the instance.
@@ -110,7 +118,7 @@ class Kyoto_Tycoon_Client {
         // Kyoto Tycoon server
         $this->_rest_client = REST_Client::instance($name, array(
             'uri' => 'http://'.$config['host'].':'.$config['port'].'/',
-            'content_type' => 'text/tab-separated-values'
+            'content_type' => 'text/tab-separated-values; colenc=B'
         ));
 	}
 
@@ -126,7 +134,31 @@ class Kyoto_Tycoon_Client {
      */
     public function set($key, $value, $expires = NULL)
     {
-        // Grab a reference to the rest client 
+        // Base64-encode the key
+        $key = base64_encode($key);
+
+        // Base64-encode the value
+        $value = base64_encode($value);
+
+        // If expires is set, Base64-encode it as well
+        $expires = isset($expires) ? base64_encode($expires) : NULL;
+
+        // Assemble the request string and make the request using the
+        // REST client
+        $result = $this->_rest_client->post('rpc/set',
+            self::BASE64_KEY.self::TAB.$key.self::CRLF.
+            self::BASE64_VALUE.self::TAB.$value
+        );
+
+        // If we get back anything other then a status 200
+        if ($result->status !== REST_Client::HTTP_OK) {
+            // Throw an exception
+            throw new Kyoto_Tycoon_Exception($result->data, NULL,
+                $result->status);
+        }
+
+        // Return a reference to this class instance
+        return $this;
     }
 
     /**
@@ -137,6 +169,33 @@ class Kyoto_Tycoon_Client {
      */
     public function get($key)
     {
+        // Base64-encode the key
+        $key = base64_encode($key);
+
+        // Assemble the request string and make the request using the
+        // REST client
+        $result = $this->_rest_client->post('rpc/get',
+            self::BASE64_KEY.self::TAB.$key
+        );
+
+        // If we get back anything other then a status 200
+        if ($result->status !== REST_Client::HTTP_OK) {
+            // Throw an exception
+            throw new Kyoto_Tycoon_Exception($result->data, NULL,
+                $result->status);
+        }
+
+        // Trim any whitespace off the data and break the lines apart on
+        // each CRLF sequence
+        $lines = explode(self::CRLF, trim($result->data));
+
+        // Loop over each line
+        foreach ($lines as $line) {
+            // Break apart the lines on the first tab
+            $columns = explode(self::TAB, $line, 2);
+
+            var_dump($columns);
+        }
     }
 
 } // End Kyoto_Tycoon_Client
