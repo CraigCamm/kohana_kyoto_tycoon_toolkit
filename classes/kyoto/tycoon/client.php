@@ -1,4 +1,4 @@
-<?php
+<?php defined('SYSPATH') or die('No direct script access.');
 /**
  * Manages the low-level communication with the Kyoto Tycoon server.
  *
