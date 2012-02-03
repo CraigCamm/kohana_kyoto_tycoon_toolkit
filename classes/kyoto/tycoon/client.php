@@ -44,6 +44,7 @@ class Kyoto_Tycoon_Client {
      */
     public function set($key, $value, $expires = NULL)
     {
+        // 
     }
 
     /**
@@ -55,55 +56,5 @@ class Kyoto_Tycoon_Client {
     public function get($key)
     {
     }
-
-	/**
-	 * Makes a simple POST HTTP request out to the the remote RPC server.
-	 *
-	 * @param   string  The URI to make the HTTP request against.
-	 * @param   string  The raw POST data to send up.
-	 * @param   array   An array of key value pairs to transform into headers.
-	 * @return  object  A object with status and data members.
-	 */
-	protected function _http_post($uri = NULL, $post = NULL, $headers = NULL)
-    {
-		// Initialize the CURL library
-		$curl_request = curl_init();
-
-		// No matter what type of request this is we always need the URI
-		curl_setopt($curl_request, CURLOPT_URL, $uri);
-
-        // Set this request up as a POST request
-        curl_setopt($curl_request, CURLOPT_POST, TRUE);
-
-        // Set the POST data to send up
-        curl_setopt($curl_request, CURLOPT_POSTFIELDS, $post);
-
-		// Make sure that we get data back when we call exec
-		curl_setopt($curl_request, CURLOPT_RETURNTRANSFER, TRUE);
-
-		// If we have headers that we need to send up with the request
-		if ($headers !== NULL)
-		{
-			// Loop over the headers that were passed in
-			foreach ($headers as $key => $value)
-			{
-				// Collapse the key => value pair into one line
-				$simple_headers[] = $key.': '.$value;
-			}
-
-			// Set the headers we want to send up
-			curl_setopt($curl_request, CURLOPT_HTTPHEADER, $simple_headers);
-		}
-
-		// Run the request, get the status, close the request
-		$data = curl_exec($curl_request);
-		$status = curl_getinfo($curl_request, CURLINFO_HTTP_CODE);
-
-        // Return the HTTP status code and the data
-		return (object) array(
-            'status' => $status,
-            'data' => $data
-        );
-	}
 
 } // End Kyoto_Tycoon_Client
