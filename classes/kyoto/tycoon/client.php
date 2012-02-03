@@ -33,101 +33,27 @@ class Kyoto_Tycoon_Client {
     }
 
     /**
-     * Traps all attempts to call undefined methods on this class.
+     * Handles the setting of a single Kyoto Tycoon key/value pair.
      *
-     * @param   string  The name of the method being invoked.
-     * @param   array   An array of arguments that were passed in.
-     * @return  mixed   The result of the remote method.
+     * @param   string  The name of the key being set.
+     * @param   string  The value to assign to the key.
+     * @param   int     The number of seconds the key should exist before it
+     *                  automatically expires. Defaults to NULL, or forever.
+     * @return  object  A reference to this class instance, so we can do
+     *                  method chaining.
      */
-    public function __call($method_name, $method_parameters)
+    public function set($key, $value, $expires = NULL)
     {
-        // Build the access object
-        $access = (object) array(
-            'type' => isset($this->_password) ? 'authentication' : 'token'
-        );
-
-        // If the password class variable is set
-        if (isset($this->_password)) {
-            // Add the username and password to the access object
-            $access->username = $this->_username_or_token;
-            $access->password = $this->_password;
-        } else {
-            // Add the token to the access object
-            $access->token = $this->_username_or_token;
-        }
-
-        // Determine the version string to use
-        $version = isset($this->_remote_api_version) ?
-            $this->_remote_api_version.'_' : '';
-
-        // Add the access object as the first parameter to the method
-        array_unshift($method_parameters, $access);
-
-        // Create the JSON-RPC request object
-        $request = (object) array(
-            'method' => $version.$this->_remote_class_name.'.'.$method_name,
-            'params' => $method_parameters,
-            'id' => sha1(uniqid(rand(), TRUE))
-        );
-
-        // Make an HTTP POST request out to the remote RPC server passing the
-        // JSON-encoded request object as the POST data
-        $response = $this->_http_post($this->_uri, json_encode($request),
-            array('Content-Type' => 'application/json'));
-           
-        // If the remote web server did not respond with a success status
-        if ((string) $response->status !== '200') {
-            // Throw an exception
-            throw new Exception('HTTP status "'.
-                ((string) $response->status).'"');
-        }
-
-        // Attempt to deserialize (what should be) the JSON-encoded response
-        $data = json_decode($response->data);
-        
-        // If the attempt to decode failed
-        if ($data === NULL AND $response->data !== 'null') {
-            // Throw an exception
-            throw new Exception('JSON decode failure for response "'.
-                ((string) $response->status).'"');
-        }
-
-        // If some kind of error occurred on the remote server, forward the
-        // exception locally
-        if (isset($data->error)) {
-            // Grab a shortcut variable to the error member of the response
-            $error = $data->error;
-
-            // If the error value is just a string
-            if ( ! is_object($error)) {
-                // Throw an exception, passing the string value of the error
-                throw new Exception('API SERVER ERROR: '.((string) $error));
-            }
-
-            // Grab shortcut variables to the message and code members of the
-            // error response object
-            $message = isset($error->message) ? $error->message : 'Error '.
-                'message unavailable';
-            $code = isset($error->code) ? $error->code : 0;
-            $class = isset($error->class) ? $error->class : "Class unavailable";
-            // Throw the exception
-            throw new Exception('API SERVER ERROR: '. $class .' : '.((string) $message),
-                $code);
-        }
-
-        // Return the response data
-        return $data->result;
     }
 
     /**
-     * Returns the all-lowercase version of this class instances class name.
+     * Handles the retrieval of a single Kyoto Tycoon key/value pair.
      *
-     * @return  string  The class name for this class instance, in lowercase.
+     * @param   string  The name of the key being set.
+     * @return  string  The result of the Kyoto Tycoon call.
      */
-    protected function _get_class_name()
+    public function get($key)
     {
-        // Return the all-lowercase version of this class instances name
-        return get_class($this);
     }
 
 	/**
