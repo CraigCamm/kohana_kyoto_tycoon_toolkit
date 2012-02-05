@@ -1,6 +1,7 @@
 <?php defined('SYSPATH') or die('No direct script access.');
 /**
- * Manages the low-level communication with the Kyoto Tycoon server.
+ * Manages the low-level communication with the Kyoto Tycoon server using
+ * the REST Client stuff for the actual HTTP/curl logic.
  *
  * @package    Kohana/Kyoto Tycoon Client
  * @category   Extension
