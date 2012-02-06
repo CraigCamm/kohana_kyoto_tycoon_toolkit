@@ -62,7 +62,7 @@ class Kyoto_Tycoon_Client {
             // If no configuration options were passed in
             if ($config === NULL) {
                 // Load the configuration for this client
-                $config = Kohana::$config->load('kyoto')->get($name);
+                $config = Kohana::$config->load('kyototycoon')->get($name);
             }
 
             // Create the client instance
