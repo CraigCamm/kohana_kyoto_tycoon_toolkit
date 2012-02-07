@@ -208,6 +208,10 @@ class Kyoto_Tycoon_Client {
     }
 
     /**
+     * 
+     */
+
+    /**
      * Most Kyoto Tycoon responses use tab-separated-values with one of three
      * simple encodings:
      *
