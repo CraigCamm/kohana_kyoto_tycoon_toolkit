@@ -74,6 +74,7 @@ class Kyoto_Tycoon_Client {
 
     // Constants for Base64-encoded keywords
     const BASE64_KEY = 'a2V5';
+    const BASE64_NUM = 'bnVt';
     const BASE64_VALUE = 'dmFsdWU=';
 
     // Constants for tab-separated-values format
@@ -201,6 +202,46 @@ class Kyoto_Tycoon_Client {
 
         // Return a reference to this class instance
         return $this;
+    }
+
+    /**
+     * Handles the retrieval of a single Kyoto Tycoon increment integer.
+     *
+     * @param   string  The name of the key being set.
+     * @return  string  The result of the Kyoto Tycoon call.
+     */
+    public function increment($key,$value)
+    {
+        // Base64-encode the key
+        $key = base64_encode($key);
+
+        // Assemble the request string and make the request using the
+        // REST client
+        $result = $this->_rest_client->post('rpc/increment',
+            self::BASE64_KEY.self::TAB.$key.self::CRLF.
+            self::BASE64_NUM.self::TAB.$value
+        );
+
+        // If we get back anything other then a status 200
+        if ($result->status !== REST_Client::HTTP_OK) {
+            // Throw an exception
+            throw new Kyoto_Tycoon_Exception($result->body, NULL,
+                $result->status);
+        }
+
+        // Attempt to grab the 'Content-Type' response header
+        $content_type = isset($result->headers['Content-Type']) ?
+            $result->headers['Content-Type'] : self::DEFAULT_CONTENT_TYPE;
+
+        // Parse and decode the response body
+        $parsed = self::_parse_tab_separated_values($content_type,
+            $result->body);
+
+        // Take the parsed table and transform it into key/value pairs
+        $parsed = self::_table_to_key_value_pairs($parsed);
+
+        // Return the value member
+        return isset($parsed['value']) ? $parsed['value'] : NULL;
     }
 
     /**
