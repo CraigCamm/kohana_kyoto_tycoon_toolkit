@@ -78,7 +78,7 @@ class Kyoto_Tycoon_Client {
 
     // Constants for tab-separated-values format
     const TAB = "\t";
-    const CRLF = "\r\n";
+    const LF = "\n";
 
     // Internal constants
     const NOT_ENCODED = 0;
@@ -135,6 +135,44 @@ class Kyoto_Tycoon_Client {
     }
 
     /**
+     * Does a simple test to confirm that we get an HTTP Status 200 back from
+     * the Kyoto Tycoon server.
+     *
+     * @return  object  A reference to this class instance, so we can do
+     *                  method chaining.
+     */
+    public function void()
+    {
+        // Make the Kyoto Tycoon RPC request
+        $response = $this->_rpc('void', array());
+
+        // Return a reference to this class instance
+        return $this;
+    }
+
+    /**
+     * Returns a report from the Kyoto Tycoon server.
+     *
+     * @return  array   A set of key/value pairs.
+     */
+    public function report()
+    {
+        // Make the Kyoto Tycoon RPC request
+        return $this->_rpc('report', array());
+    }
+
+    /**
+     * Returns the status of the Kyoto Tycoon server.
+     *
+     * @return  array   A set of key/value pairs.
+     */
+    public function status()
+    {
+        // Make the Kyoto Tycoon RPC request
+        return $this->_rpc('status', array());
+    }
+
+    /**
      * Handles the setting of a single Kyoto Tycoon key/value pair.
      *
      * @param   string  The name of the key being set.
@@ -180,6 +218,41 @@ class Kyoto_Tycoon_Client {
         return isset($response['value']) ? $response['value'] : NULL;
     }
 
+    /**
+     * Attempts to increment a single Kyoto Tycoon key/value pair.
+     *
+     * @param   string  The name of the key being incremented.
+     * @param   int     Optional. The additional number. Defaults to 1.
+     * @param   int     Optional. The origin number. Defaults to 0.
+     * @return  int     The incremented number.
+     */
+    public function increment($key, $additional_number = 1, $origin = NULL,
+        $expires = NULL)
+    {
+        // Define the body of the request
+        $request = array(
+            'key' => $key,
+            'num' => $additional_number,
+        );
+
+        // If the origin number is set
+        if (isset($origin)) {
+            // Add it to the request
+            $request['orig'] = $origin;
+        }
+
+        // If expires is set
+        if (isset($expires)) {
+            // Add it to the request
+            $request['xt'] = $expires;
+        }
+
+        // Make the Kyoto Tycoon RPC request
+        $response = $this->_rpc('increment', $request);
+
+        // Return the incremented number
+        return isset($response['num']) ? $response['num'] : NULL;
+    }
     /**
      * Performs a Kyoto Tycoon RPC request over HTTP POST, encoding the passed
      * request data and decoding the response.
@@ -272,8 +345,8 @@ class Kyoto_Tycoon_Client {
             $row = implode(self::TAB, $row);
         }
 
-        // Implode all of the rows with CRLF between each row
-        return implode(self::CRLF, $rows);
+        // Implode all of the rows with LF between each row
+        return implode(self::LF, $rows);
     }
 
     /**
@@ -304,8 +377,8 @@ class Kyoto_Tycoon_Client {
         $parsed_rows = array();
 
         // Trim any whitespace off the data and break the rows apart on
-        // each CRLF sequence
-        $rows = explode(self::CRLF, trim($data));
+        // each LF sequence
+        $rows = explode(self::LF, trim($data));
 
         // Loop over each row of returned TSV data
         while ($row = array_shift($rows)) {
