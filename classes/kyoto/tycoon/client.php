@@ -84,7 +84,12 @@ class Kyoto_Tycoon_Client {
     const NOT_ENCODED = 0;
     const BASE64_ENCODED = 1;
     const URL_ENCODED = 2;
-    const DEFAULT_CONTENT_TYPE = 'text/tab-separated-values';
+
+    // Content-Type header values
+    const CONTENT_TYPE_NOT_ENCODED = 'text/tab-separated-values';
+    const CONTENT_TYPE_BASE64_ENCODED = 'text/tab-separated-values; colenc=B';
+    const CONTENT_TYPE_URL_ENCODED = 'text/tab-separated-values; colenc=U';
+
 
     /**
      * @var  string  Holds the instance name.
@@ -125,7 +130,7 @@ class Kyoto_Tycoon_Client {
         // Kyoto Tycoon server
         $this->_rest_client = REST_Client::instance($name, array(
             'uri' => 'http://'.$config['host'].':'.$config['port'].'/',
-            'content_type' => 'text/tab-separated-values; colenc=B'
+            'content_type' => self::CONTENT_TYPE_BASE64_ENCODED,
         ));
     }
 
@@ -141,28 +146,20 @@ class Kyoto_Tycoon_Client {
      */
     public function set($key, $value, $expires = NULL)
     {
-        // Base64-encode the key
-        $key = base64_encode($key);
-
-        // Base64-encode the value
-        $value = base64_encode($value);
-
-        // If expires is set, Base64-encode it as well
-        $expires = isset($expires) ? base64_encode($expires) : NULL;
-
-        // Assemble the request string and make the request using the
-        // REST client
-        $result = $this->_rest_client->post('rpc/set',
-            self::BASE64_KEY.self::TAB.$key.self::CRLF.
-            self::BASE64_VALUE.self::TAB.$value
+        // Define the body of the request
+        $request = array(
+            'key' => $key,
+            'value' => $value,
         );
 
-        // If we get back anything other then a status 200
-        if ($result->status !== REST_Client::HTTP_OK) {
-            // Throw an exception
-            throw new Kyoto_Tycoon_Exception($result->body, NULL,
-                $result->status);
+        // If expires is set
+        if (isset($expires)) {
+            // Add it to the request
+            $request['xt'] = $expires;
         }
+
+        // Make the Kyoto Tycoon RPC request
+        $response = $this->_rpc('set', $request);
 
         // Return a reference to this class instance
         return $this;
@@ -176,14 +173,37 @@ class Kyoto_Tycoon_Client {
      */
     public function get($key)
     {
-        // Base64-encode the key
-        $key = base64_encode($key);
+        // Make the Kyoto Tycoon RPC request
+        $response = $this->_rpc('get', array('key' => $key));
 
-        // Assemble the request string and make the request using the
-        // REST client
-        $result = $this->_rest_client->post('rpc/get',
-            self::BASE64_KEY.self::TAB.$key
-        );
+        // Return the value member
+        return isset($response['value']) ? $response['value'] : NULL;
+    }
+
+    /**
+     * Performs a Kyoto Tycoon RPC request over HTTP POST, encoding the passed
+     * request data and decoding the response.
+     *
+     * @param   string   The Kyoto Tycoon RPC method to call.
+     * @param   array    The table of request data to send.
+     * @param   boolean  Optional. If we should assume we are encoding and
+     *                   decoding key/value pairs. Defaults to TRUE.
+     * @return  array    The parsed response data table.
+     */
+    protected function _rpc($method, $data, $key_value_pairs = TRUE)
+    {
+        // If we were passed key/value pairs as data
+        if ($key_value_pairs) {
+            // Transform the key/value pairs into a simple data table
+            $data = self::_key_value_pairs_to_table($data);
+        }
+
+        // Generate the request TSV data string
+        $data = self::_serialize_tab_separated_values(
+            self::CONTENT_TYPE_BASE64_ENCODED, $data);
+
+        // Make the request using the the REST Client's POST method
+        $result = $this->_rest_client->post('rpc/'.$method, $data);
 
         // If we get back anything other then a status 200
         if ($result->status !== REST_Client::HTTP_OK) {
@@ -197,19 +217,64 @@ class Kyoto_Tycoon_Client {
             $result->headers['Content-Type'] : self::DEFAULT_CONTENT_TYPE;
 
         // Parse and decode the response body
-        $parsed = self::_parse_tab_separated_values($content_type,
+        $parsed = self::_unserialize_tab_separated_values($content_type,
             $result->body);
 
-        // Take the parsed table and transform it into key/value pairs
-        $parsed = self::_table_to_key_value_pairs($parsed);
+        // If we should transform the returned data table into key/value pairs
+        if ($key_value_pairs) {
+            // Transform the return data table into key/value pairs
+            return self::_table_to_key_value_pairs($parsed);
+        }
 
-        // Return the value member
-        return isset($parsed['value']) ? $parsed['value'] : NULL;
+        // Return the parsed data
+        return $parsed;
     }
 
     /**
-     * 
+     * Encodes the passed 2-dimensional array structure into a TSV formatted
+     * string.
+     *
+     * @param   string  The value of the 'Content-Type' header, so we know
+     *                  which of the 3 encodings to use.
+     * @param   array   An array of arrays. Each top-level array is a row, and
+     *                  each second-level array is a set of columns.
+     * @return  string  The TSV formatted string for the passed data.
      */
+    protected static function _serialize_tab_separated_values($content_type,
+        $rows)
+    {
+        // Determine the encoding type to use based on the Content-Type string
+        $encoding_type = self::_get_encoding_type($content_type);
+
+        // Loop over the rows that were passed in
+        foreach ($rows as &$row) {
+            // Loop over each of the columns in this row
+            foreach ($row as &$column) {
+                // If we need to Base64 encode this column value
+                if ($encoding_type === self::BASE64_ENCODED) {
+                    // Parse and add this column to the parsed columns array
+                    $column = base64_encode($column);
+                    // Move on to the next value
+                    continue;
+                }
+
+                // If we need to URL decode this column value
+                if ($encoding_type === self::URL_ENCODED) {
+                    // Parse and add this colum to the parsed columns array
+                    $column = urlencode($column);
+                    // Move on to the next value
+                    continue;
+                }
+            }
+
+            // Implode this row of data with a tab character between
+            // each column
+            $row = implode(self::TAB, $row);
+        }
+
+        // Implode all of the rows with CRLF between each row
+        return implode(self::CRLF, $rows);
+    }
 
     /**
      * Most Kyoto Tycoon responses use tab-separated-values with one of three
@@ -225,41 +290,30 @@ class Kyoto_Tycoon_Client {
      *
      * @param   string  The value from the 'Content-Type' header, so know
      *                  which of the 3 value decoding techniques to use.
-     * @param   string  The response body to parse.
+     * @param   string  The TSV formatted string to parse.
      * @return  object  A simple 2-dimensional array structure to hold the
      *                  decoded rows and columns of data.
      */
-    protected static function _parse_tab_separated_values($content_type,
-        $body)
+    protected static function _unserialize_tab_separated_values($content_type,
+        $data)
     {
-        // If the response is just simple tab-separated-values
-        if ($content_type === 'text/tab-separated-values') {
-            // There is no decoding step
-            $encoding_type = self::NOT_ENCODED;
-        // If the response is Base64-encoded tab-separated-values
-        } elseif ($content_type === 'text/tab-separated-values; colenc=B') {
-            // Base64-decoding is required
-            $encoding_type = self::BASE64_ENCODED;
-        // If the response is URL-encoded tab-separated-values
-        } elseif ($content_type === 'text/tab-separated-values; colenc=U') {
-            // URL-decoding is required
-            $encoding_type = self::URL_ENCODED;
-        }
+        // Determine the encoding type to use based on the Content-Type string
+        $encoding_type = self::_get_encoding_type($content_type);
 
-        // Define an empty array to hold the parsed lines
-        $parsed_lines = array();
+        // Define an empty array to hold the parsed rows
+        $parsed_rows = array();
 
-        // Trim any whitespace off the data and break the lines apart on
+        // Trim any whitespace off the data and break the rows apart on
         // each CRLF sequence
-        $lines = explode(self::CRLF, trim($body));
+        $rows = explode(self::CRLF, trim($data));
 
-        // Loop over each line of returned TSV data
-        while ($line = array_shift($lines)) {
+        // Loop over each row of returned TSV data
+        while ($row = array_shift($rows)) {
             // Define an empty array to hold the parsed columns
             $parsed_columns = array();
 
-            // Break apart the lines on any tabs
-            $columns = explode(self::TAB, $line);
+            // Break apart the rows on any tabs
+            $columns = explode(self::TAB, $row);
 
             // Loop over each column
             foreach ($columns as $value) {
@@ -283,12 +337,36 @@ class Kyoto_Tycoon_Client {
                 $parsed_columns[] = $value;
             }
 
-            // Add this set of columns parsed lines collection
-            $parsed_lines[] = $parsed_columns;
+            // Add this set of columns parsed rows collection
+            $parsed_rows[] = $parsed_columns;
         }
 
         // Return the parsed data
-        return $parsed_lines;
+        return $parsed_rows;
+    }
+
+    /**
+     * Converts a set of key/value pairs into a simple 2-dimensional array
+     * structure representing a table with rows at the top-level, and columns
+     * at the second-level.
+     *
+     * @param   array  A set of key/value pairs.
+     * @return  array  A simple 2-dimentional array structure representing
+     *                 a table.
+     */
+    protected static function _key_value_pairs_to_table($key_value_pairs)
+    {
+        // Define an empty array for the result data to go
+        $result = array();
+
+        // Loop over each key value pair
+        foreach ($key_value_pairs as $key => $value) {
+            // Add this key value pair to the result array as a row
+            $result[] = array($key, $value);
+        }
+
+        // Return the finished result
+        return $result;
     }
 
     /**
@@ -318,6 +396,34 @@ class Kyoto_Tycoon_Client {
 
         // Return the finished result
         return $result;
+    }
+
+    /**
+     * Returns which encoding constant to use based on the passed
+     * Content-Type string.
+     *
+     * @param   string  The Content-Type header value to use.
+     * @retrun  int  
+     */
+    protected static function _get_encoding_type($content_type)
+    {
+        // If the response is just simple tab-separated-values
+        if ($content_type === self::CONTENT_TYPE_NOT_ENCODED) {
+            // There is no decoding step
+            return self::NOT_ENCODED;
+        // If the response is Base64-encoded tab-separated-values
+        } elseif ($content_type === self::CONTENT_TYPE_BASE64_ENCODED) {
+            // Base64-decoding is required
+            return self::BASE64_ENCODED;
+        // If the response is URL-encoded tab-separated-values
+        } elseif ($content_type === self::CONTENT_TYPE_URL_ENCODED) {
+            // URL-decoding is required
+           return self::URL_ENCODED;
+        }
+
+        // We did not find a valid Content-Type, so throw an exception
+        throw new Kyoto_Tycoon_Exception('Invalid Content-Type '.
+            '":content_type".', array(':content_type' => $content_type));
     }
 
 } // End Kyoto_Tycoon_Client
